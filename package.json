@@ -1,0 +1,11 @@
+{
+  "name": "bshield-python-monorepo",
+  "version": "1.0.0",
+  "description": "B-Shield Alert System — FastAPI + React/Vite",
+  "scripts": {
+    "client": "cd client && npm run dev",
+    "install:client": "cd client && npm install"
+  },
+  "author": "Grupo B-Shield — Politecnico Grancolombiano",
+  "license": "MIT"
+}
