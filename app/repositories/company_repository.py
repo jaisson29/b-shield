@@ -1,11 +1,20 @@
+from sqlalchemy.orm import Session
+
 from app.models.company import Company
 
 
 class CompanyRepository:
-    def __init__(self, db):
+    def __init__(self, db: Session):
         self.db = db
 
-    def get_company_by_id(self, company_id):
+    def get_companies(self) -> list[Company]:
+        return self.db.query(Company).all()
+
+    def get_companies_map(self) -> dict[int, Company]:
+        companies = self.get_companies()
+        return {company.id: company for company in companies}
+
+    def get_company_by_id(self, company_id) -> Company | None:
         return self.db.query(Company).filter(Company.id == company_id).first()
 
     def create_company(self, company_data):

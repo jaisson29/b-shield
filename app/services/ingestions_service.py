@@ -1,23 +1,36 @@
 import asyncio
+from datetime import datetime, timedelta, timezone
 
 import httpx
 from app.infrastructure.h1_client import (
     fetch_recent_hacktivity,
     mapear_cvss,
 )
-from app.services.classifcation_service import calculate_irc_level
+from app.models.alert import Alert
+from app.repositories.alert_repository import AlertRepository
+from app.repositories.company_repository import CompanyRepository
+from app.services.classifcation_service import ClassificationService
+from app.services.notification_service import NotificationService
 from app.services.types.ingestion_types import (
     ClassifiedReport,
     NormalizedReport,
     RawReport,
     RelevancyReport,
 )
-from app.store import Store
 
 
 class IngestionsService:
-    def __init__(self, db: Store):
-        self.db = db
+    def __init__(
+        self,
+        company_repository: CompanyRepository,
+        alert_repository: AlertRepository,
+        notification_service: NotificationService,
+        classification_service: ClassificationService,
+    ):
+        self.company_repository = company_repository
+        self.alert_repository = alert_repository
+        self.notification_service = notification_service
+        self.classification_service = classification_service
 
     TECH_MAP: dict[str, str] = {
         "node": "node.js",
@@ -50,12 +63,15 @@ class IngestionsService:
         # Aquí iría la lógica real de ingesta desde HackerOne API.
         # Por ahora, es un mock que simula la respuesta de la API.
         raw_data = await self.filter_1_ingestion()
-        normalized_data = await self.filter_2_normalization(raw_data)
+        normalized_data = self.filter_2_normalization(raw_data)
+        relevancy_data = self.filter_3_relevancy(normalized_data)
+        classified_data = self.filter_4_clasification(relevancy_data)
+        enriched_data = self.filter_5_enrichment(classified_data)
+        self.filter_6_distribution(enriched_data)
 
         return normalized_data
 
-    def _now():
-        from datetime import datetime, timezone
+    def _now(self) -> datetime:
 
         return datetime.now(timezone.utc)
 
@@ -66,7 +82,7 @@ class IngestionsService:
             response = await fetch_recent_hacktivity()
             return [RawReport(**r) for r in response]
 
-    async def filter_2_normalization(
+    def filter_2_normalization(
         self, raw_data: list[RawReport]
     ) -> list[NormalizedReport]:
         print(f"[Pipeline][F2] Normalizando {len(raw_data)} reportes...")
@@ -99,9 +115,9 @@ class IngestionsService:
         result: list[RelevancyReport] = []
 
         for rep in normalized_data:
-            for empresa in self.db.companies.values():
+            for empresa in self.company_repository.get_companies():
                 techs = rep.tecnologias_detectadas
-                stack = empresa["stack"]
+                stack = empresa.stack
                 impactadas = [t for t in techs if t in stack] if techs else stack
 
                 if impactadas or not techs:
@@ -114,8 +130,8 @@ class IngestionsService:
                             fecha=rep.fecha,
                             fuente_url=rep.fuente_url,
                             tecnologias_detectadas=rep.tecnologias_detectadas,
-                            empresa_id=empresa["id"],
-                            empresa_nombre=empresa["nombre"],
+                            empresa_id=empresa.id,
+                            empresa_nombre=empresa.name,
                             impactadas=impactadas,
                         )
                     )
@@ -123,18 +139,21 @@ class IngestionsService:
         print(f"[Pipeline][F3] {len(result)} pares empresa-vulnerabilidad relevantes")
         return result
 
-    def filter_4_clasification(self, items: list[RelevancyReport]) -> list[ClassifiedReport]:
+    def filter_4_clasification(
+        self, items: list[RelevancyReport]
+    ) -> list[ClassifiedReport]:
         print("[Pipeline][F4] Calculando Índice de Riesgo Contextual (IRC)...")
         result: list[ClassifiedReport] = []
+        companies_by_id = self.company_repository.get_companies_map()
 
         for item in items:
-            company = self.db.companies.get(item.empresa_id)
-            stack = company["stack"] if company else []
+            company = companies_by_id.get(item.empresa_id)
+            stack = company.stack if company else []
             impactadas = item.impactadas or []
 
             exposition = len(impactadas) / len(stack) if stack else 0.0
             irc_score = round(item.cvss_score * 0.6 + exposition * 10 * 0.4, 2)
-            nivel = calculate_irc_level(irc_score)
+            nivel = self.classification_service.calculate_irc_level(irc_score)
 
             result.append(
                 ClassifiedReport(
@@ -153,3 +172,64 @@ class IngestionsService:
                 )
             )
         return result
+
+    def filter_5_enrichment(self, items: list[ClassifiedReport]) -> list[dict]:
+        print("[Pipeline][F5] Enriqueciendo con mitigaciones NIST/OWASP...")
+        return [
+            {
+                **item.model_dump(),
+                "recomendacion": self.classification_service.get_mitigation(
+                    item.cwe_id
+                )["recomendacion"],
+            }
+            for item in items
+        ]
+
+    def filter_6_distribution(self, items: list[dict]):
+        print("[Pipeline][F6] Distribuyendo alertas...")
+        generadas = 0
+        hace_24h = datetime.now(timezone.utc) - timedelta(hours=24)
+        empresas = self.company_repository.get_companies_map()
+
+        for item in items:
+            empresa = empresas.get(item["empresa_id"])
+            if not empresa:
+                continue
+
+            # Respetar umbral CVSS configurado por la empresa
+            if item["cvss_score"] < empresa.threshold_cvss:
+                continue
+
+            # Deduplicar: no generar alerta si ya existe la misma empresa+CWE en 24h
+            exists = self.alert_repository.get_if_alert_exists(
+                company_id=empresa.id,
+                cwe_id=item["cwe_id"],
+                fecha_emision=hace_24h,
+            )
+            if exists:
+                continue
+
+            alert = Alert(
+                company_id=empresa.id,
+                cwe_id=item["cwe_id"],
+                cwe_name=self.classification_service.get_mitigation(item["cwe_id"])[
+                    "nombre"
+                ],
+                cvss_score=item["cvss_score"],
+                irc_score=item["irc_score"],
+                critical_level=item["nivel_criticidad"],
+                affected_technologies=item["impactadas"],
+                description=item["titulo"],
+                recommendation=item["recomendacion"],
+                source_url=item["fuente_url"],
+                status="pending",
+                emitted_at=self._now(),
+                updated_at=None,
+            )
+            self.alert_repository.create_alert(alert)
+
+            # Disparar notificación para críticas y altas
+            if item["nivel_criticidad"] in ("Critico", "Alto"):
+                self.notification_service.notify_alert(alert, empresa)
+
+        return generadas

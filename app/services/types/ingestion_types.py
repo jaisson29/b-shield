@@ -10,7 +10,7 @@ class RawReportAttributes(BaseModel):
     severity_rating: str
     created_at: str
     disclosed_at: str | None
-    severity: dict | None
+    severity: str | None
 
 class RawReport(BaseModel):
     id: int
@@ -28,7 +28,7 @@ class NormalizedReport(BaseModel):
     tecnologias_detectadas: list[str]
 
 class RelevancyReport(NormalizedReport):
-    empresa_id: str
+    empresa_id: int
     empresa_nombre: str
     impactadas: list[str]
 

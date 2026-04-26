@@ -1,10 +1,21 @@
+from contextlib import asynccontextmanager
+import os
+
 from fastapi import APIRouter, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
+from app.database import init_db
 from app.routes import ingestion_routes
 from dotenv import load_dotenv
 
 load_dotenv()
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    if os.getenv("AUTO_INIT_DB", "false").lower() == "true":
+        init_db()
+    yield
 
 app = FastAPI(
     title="B-Shield Alert System API",
@@ -16,6 +27,7 @@ app = FastAPI(
     version="1.0.0",
     docs_url="/docs",
     redoc_url="/redoc",
+    lifespan=lifespan,
 )
 
 app.add_middleware(
