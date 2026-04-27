@@ -3,7 +3,7 @@ from fastapi import HTTPException
 
 from app.repositories.alert_repository import AlertRepository
 from app.repositories.company_repository import CompanyRepository
-from app.services.types.classification_types import EvaluateRequest
+from app.services.types.classification_types import EvaluateCommand
 
 
 class ClassificationService:
@@ -75,14 +75,14 @@ class ClassificationService:
             return "medium"
         return "low"
 
-    def evaluate(self, body: EvaluateRequest):
-        empresa = self.company_repository.get_company_by_id(body.empresa_id)
+    def evaluate(self, body: EvaluateCommand):
+        empresa = self.company_repository.get_company_by_id(body.company_id)
         if not empresa:
             raise HTTPException(
-                404, detail=f"Empresa '{body.empresa_id}' no encontrada"
+                404, detail=f"Empresa '{body.company_id}' no encontrada"
             )
 
-        tech_afect = [t.lower() for t in body.tecnologias_afectadas]
+        tech_afect = [t.lower() for t in body.affected_technologies]
         stack_emp = [t.lower() for t in empresa.stack]
 
         impactadas = (
@@ -95,7 +95,7 @@ class ClassificationService:
         mit = self.MITIGACIONES.get(body.cwe_id, self.MITIGACIONES["DEFAULT"])
 
         return {
-            "empresa_id": body.empresa_id,
+            "company_id": body.company_id,
             "empresa_nombre": empresa.name,
             "cwe_id": body.cwe_id,
             "cwe_nombre": mit["nombre"],

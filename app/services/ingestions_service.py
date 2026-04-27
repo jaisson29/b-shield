@@ -2,6 +2,7 @@ import asyncio
 from datetime import datetime, timedelta, timezone
 
 import httpx
+from app.store import store
 from app.infrastructure.h1_client import (
     fetch_recent_hacktivity,
     mapear_cvss,
@@ -60,16 +61,28 @@ class IngestionsService:
     }
 
     async def run_ingestion(self):
-        # Aquí iría la lógica real de ingesta desde HackerOne API.
-        # Por ahora, es un mock que simula la respuesta de la API.
+        start = self._now()
+        print(f"\n[Pipeline] ════ Inicio de ciclo: {start} ════")
         raw_data = await self.filter_1_ingestion()
         normalized_data = self.filter_2_normalization(raw_data)
         relevancy_data = self.filter_3_relevancy(normalized_data)
         classified_data = self.filter_4_clasification(relevancy_data)
         enriched_data = self.filter_5_enrichment(classified_data)
-        self.filter_6_distribution(enriched_data)
+        generated = self.filter_6_distribution(enriched_data)
 
-        return normalized_data
+        end = self._now()
+        status = {
+            "estado": "exitoso",
+            "inicio": start,
+            "fin": end,
+            "reportes_recibidos": len(raw_data),
+            "alertas_generadas": generated,
+            "error": None,
+        }
+        store.last_ingestion_status.update(status)
+        store.ingestion_logs.append(dict(status))
+        print(f"[Pipeline] ════ Completado: {generated} alerta(s) generada(s) ════\n")
+        return status
 
     def _now(self) -> datetime:
 
@@ -79,7 +92,7 @@ class IngestionsService:
         async with httpx.AsyncClient() as client:
             client.base_url = "https://api.hackerone.com/v1"
 
-            response = await fetch_recent_hacktivity()
+            response = await fetch_recent_hacktivity(page_size=100)
             return [RawReport(**r) for r in response]
 
     def filter_2_normalization(

@@ -34,6 +34,15 @@ class CompanyRepository:
         self.db.refresh(company)
         return company
 
+    def update_stack(self, company_id, stack_data):
+        company = self.get_company_by_id(company_id)
+        if not company:
+            return None
+        company.stack = stack_data
+        self.db.commit()
+        self.db.refresh(company)
+        return company
+
     def delete_company(self, company_id):
         company = self.get_company_by_id(company_id)
         if not company:

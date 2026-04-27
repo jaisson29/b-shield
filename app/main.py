@@ -5,7 +5,8 @@ from fastapi import APIRouter, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
 from app.database import init_db
-from app.routes import ingestion_routes
+from app.middleware.auth import auth_middleware
+from app.routes import alert_routes, auth_routes, classification_routes, company_routes, ingestion_routes
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -16,6 +17,7 @@ async def lifespan(app: FastAPI):
     if os.getenv("AUTO_INIT_DB", "false").lower() == "true":
         init_db()
     yield
+
 
 app = FastAPI(
     title="B-Shield Alert System API",
@@ -30,6 +32,8 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+app.add_middleware(BaseHTTPMiddleware, dispatch=auth_middleware)
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
@@ -42,12 +46,15 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# app.add_middleware(BaseHTTPMiddleware, dispatch=auth_middleware)
-
 
 router = APIRouter(prefix="/api")
 
 router.include_router(ingestion_routes.router)
+router.include_router(auth_routes.router)
+router.include_router(alert_routes.router)
+router.include_router(company_routes.router)
+router.include_router(classification_routes.router)
+
 
 @router.get("/health", tags=["Sistema"], summary="Estado del servicio")
 def health_check():
@@ -60,5 +67,6 @@ def health_check():
         "backend": "Python / FastAPI",
         "timestamp": datetime.now(timezone.utc).isoformat(),
     }
+
 
 app.include_router(router)

@@ -1,8 +1,8 @@
 from pydantic import BaseModel, Field
 
 
-class EvaluateRequest(BaseModel):
-    empresa_id: str
+class EvaluateCommand(BaseModel):
+    company_id: str
     cwe_id: str
     cvss_score: float = Field(ge=0, le=10)
-    tecnologias_afectadas: list[str] = []
+    affected_technologies: list[str] = []

@@ -17,4 +17,4 @@ class AlertCreate(BaseModel):
 
 
 class AlertStatusUpdate(BaseModel):
-    estado: str
+    status: str

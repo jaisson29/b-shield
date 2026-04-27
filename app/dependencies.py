@@ -20,6 +20,18 @@ def get_alert_repository(db: Session = Depends(get_db)):
     return AlertRepository(db)
 
 
+def get_auth_service():
+    from app.services.auth_service import AuthService
+
+    return AuthService()
+
+
+def get_alert_service(alert_repository=Depends(get_alert_repository)):
+    from app.services.alerts_service import AlertService
+
+    return AlertService(alert_repository=alert_repository)
+
+
 def get_classification_service(
     company_repository=Depends(get_company_repository),
     alert_repository=Depends(get_alert_repository),
@@ -29,6 +41,12 @@ def get_classification_service(
     return ClassificationService(
         company_repository=company_repository, alert_repository=alert_repository
     )
+
+
+def get_company_service(company_repository=Depends(get_company_repository)):
+    from app.services.companies_service import CompanyService
+
+    return CompanyService(company_repository=company_repository)
 
 
 def get_notification_service():
