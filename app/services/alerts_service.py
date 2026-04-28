@@ -13,7 +13,7 @@ class AlertService:
 
         return datetime.now().isoformat()
 
-    def list_alerts(self, company_id: int, nivel=None, estado=None, desde=None):
+    def list_alerts(self, company_id: int | None, nivel=None, estado=None, desde=None):
         result = self.alert_repository.get_alerts_by_company_id_with_filters(
             company_id, nivel, estado, desde
         )
@@ -73,9 +73,9 @@ class AlertService:
     def create_alert(self, alert_data):
         return self.alert_repository.create_alert(alert_data)
 
-    def update_status(self, alert_id: int, status_data: str, user_id: int):
+    def update_status(self, alert_id: int, status_data: str):
         status_data = status_data.lower()
         if status_data not in AlertStatus.__members__:
             raise HTTPException(400, detail="Estado no válido")
         status_data = AlertStatus[status_data]
-        return self.alert_repository.update_status(alert_id, status_data, user_id)
+        return self.alert_repository.update_status(alert_id, status_data)

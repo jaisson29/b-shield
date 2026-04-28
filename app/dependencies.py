@@ -1,11 +1,13 @@
+from collections.abc import Generator
+
 from fastapi import Depends
 from sqlalchemy.orm import Session
 
 
-def get_db():
-    from app.database import get_db
+def get_db() -> Generator[Session, None, None]:
+    from app.database import get_db as database_get_db
 
-    return next(get_db())
+    yield from database_get_db()
 
 
 def get_company_repository(db: Session = Depends(get_db)):

@@ -26,6 +26,7 @@ def evaluate(
         ClassificationService, Depends(get_classification_service)
     ],
 ):
+    print(body)
     mapped_body = EvaluateCommand(**body.model_dump())
 
     return classification_service.evaluate(mapped_body)

@@ -36,9 +36,11 @@ class AlertRepository:
         return self.db.query(Alert).filter(Alert.company_id == company_id).all()
 
     def get_alerts_by_company_id_with_filters(
-        self, company_id: int, nivel=None, estado=None, desde=None
+        self, company_id: int | None = None, nivel=None, estado=None, desde=None
     ) -> list[Alert]:
-        query = self.db.query(Alert).filter(Alert.company_id == company_id)
+        query = self.db.query(Alert)
+        if company_id is not None:
+            query = query.filter(Alert.company_id == company_id)
         if nivel:
             query = query.filter(Alert.critical_level == nivel)
         if estado:
@@ -51,9 +53,7 @@ class AlertRepository:
                 pass
         return query.all()
 
-    def update_status(
-        self, alert_id: int, new_status: AlertStatus, user_id: int
-    ) -> Alert | None:
+    def update_status(self, alert_id: int, new_status: AlertStatus) -> Alert | None:
         alert = self.get_alert_by_id(alert_id)
         if alert is None:
             return None

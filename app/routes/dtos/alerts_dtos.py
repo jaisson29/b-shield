@@ -1,6 +1,8 @@
 from pydantic import BaseModel, Field
 from typing import Optional
 
+from app.store import Alert
+
 
 # ── Alertas ───────────────────────────────────────────────────
 class AlertCreate(BaseModel):
@@ -18,3 +20,8 @@ class AlertCreate(BaseModel):
 
 class AlertStatusUpdate(BaseModel):
     status: str
+
+class AlertsResponse(BaseModel):
+    total: int
+    filtros: dict
+    alerts: list[Alert]

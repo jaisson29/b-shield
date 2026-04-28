@@ -1,8 +1,8 @@
-import os
 from typing import Awaitable, Callable
-from jwt import PyJWT
 
 from fastapi import HTTPException, Request, Response
+
+from app.services.auth_service import AuthService
 
 PUBLIC_PATHS = {"/login", "/health", "/docs", "/openapi.json", "/redoc"}
 
@@ -19,6 +19,8 @@ VALID_TOKENS: dict[str, dict] = {
     },
     "bshield-demo-token": {"sub": "user-003", "rol": "admin", "nombre": "Demo User"},
 }
+
+auth_service = AuthService()
 
 
 async def auth_middleware(
@@ -42,9 +44,7 @@ async def auth_middleware(
         request.state.user = VALID_TOKENS[token]
         return await call_next(request)
 
-    user = PyJWT().decode(
-        token, os.getenv("JWT_SECRET_KEY", "default_secret"), algorithms=["HS256"]
-    )
+    user = auth_service.decode_token(token)
     request.state.user = user
     return await call_next(request)
 
